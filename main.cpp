@@ -1,4 +1,6 @@
 #include <iostream>
+#include <sqlite3.h>
+#include "DatabaseManager.h"
 
 using namespace std;
 void mainmenu() {
@@ -23,8 +25,23 @@ void mainmenu() {
             mainmenu(); // Rekurencyjne wywołanie menu
     }
 }
+void database_init(DatabaseManager& db) {
+    if (!db.connect()) {
+        return;
+    }
+    db.createTables();
+}
 
 int main() {
+    DatabaseManager db("baza_uczelnia.db");
+    database_init(db);
+
+    if (db.addUser(000000, "ADMIN", "haslo", "admin")) {
+    std::cout << "Uzytkownik dodany pomyslnie." << std::endl;
+    } else {
+        std::cout << "Blad przy dodawaniu uzytkownika." << std::endl;
+    }
+
     mainmenu();
     return 0;
 }
