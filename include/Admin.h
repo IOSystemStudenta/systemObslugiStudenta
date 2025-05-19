@@ -2,8 +2,8 @@
 
 class Admin : public Uzytkownik {
     public:
-        Admin(int id, int nrAlbumu, const std::string& haslo, const std::string& rola)
-            : Uzytkownik(id, nrAlbumu, haslo, rola) {}
+        Admin(int id, int nrAlbumu, const std::string& imie, const std::string& haslo)
+            : Uzytkownik(id, nrAlbumu, imie, haslo, "admin") {}
 
         void dodajUzytkownika() {
             // Implementacja zarządzania użytkownikami

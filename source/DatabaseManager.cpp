@@ -1,4 +1,8 @@
 #include "DatabaseManager.h"
+#include "Uzytkownik.h"
+#include "Admin.h"
+#include "Student.h"
+#include "Prowadzacy.h"
 #include <iostream>
 
 DatabaseManager::DatabaseManager(const std::string& name) {
@@ -18,6 +22,13 @@ bool DatabaseManager::connect() {
     }
     std::cout << "Polaczono z baza danych: " << dbName << std::endl;
     return true;
+}
+
+void DatabaseManager::initialize() {
+    if (!connect()) {
+        return;
+    }
+    createTables();
 }
 
 void DatabaseManager::close() {
@@ -145,3 +156,41 @@ bool DatabaseManager::addUser(int nrAlbum, const std::string& imie, const std::s
     sqlite3_finalize(stmt);
     return true;
 }
+
+sqlite3* DatabaseManager::getConnection() const {
+    return db;
+}
+
+std::unique_ptr<Uzytkownik> DatabaseManager::login(int nrAlbum, const std::string& haslo) {
+    std::string sql = "SELECT id, imie, rola FROM Uzytkownik WHERE nrAlbum = ? AND haslo = ?;";
+    sqlite3_stmt* stmt = nullptr;
+
+    if (sqlite3_prepare_v2(db, sql.c_str(), -1, &stmt, nullptr) != SQLITE_OK) {
+        std::cerr << "Blad przygotowania zapytania SQL: " << sqlite3_errmsg(db) << std::endl;
+        return nullptr;
+    }
+
+    sqlite3_bind_int(stmt, 1, nrAlbum);
+    sqlite3_bind_text(stmt, 2, haslo.c_str(), -1, SQLITE_TRANSIENT);
+
+    std::unique_ptr<Uzytkownik> user = nullptr;
+
+    if (sqlite3_step(stmt) == SQLITE_ROW) {
+        int id = sqlite3_column_int(stmt, 0);
+        std::string imie = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1));
+        std::string rola = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 2));
+
+        if (rola == "admin") {
+            user = std::make_unique<Admin>(id, nrAlbum, imie, haslo);
+        } else if (rola == "student") {
+            user = std::make_unique<Student>(id, nrAlbum, imie, haslo);
+        } else if (rola == "prowadzacy") {
+            user = std::make_unique<Prowadzacy>(id, nrAlbum, imie, haslo);
+        }
+    }
+
+    sqlite3_finalize(stmt);
+    return user;
+}
+
+
