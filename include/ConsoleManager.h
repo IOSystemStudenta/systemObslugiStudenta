@@ -13,6 +13,7 @@ public:
     void showLoginFailure();
     void showAdminMenu(DatabaseManager& db);
     void showAddUserPrompt(DatabaseManager& db);
+    void showAddDepartmentPrompt(DatabaseManager& db);
     void printLine(const std::string& msg);
 };
 

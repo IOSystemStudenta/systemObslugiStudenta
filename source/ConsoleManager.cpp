@@ -2,6 +2,7 @@
 #include "Uzytkownik.h"
 #include <iostream>
 #include <memory>
+#include <limits>
 
 void ConsoleManager::showWelcomeMessage() {
     std::cout << "=============================" << std::endl;
@@ -84,6 +85,7 @@ void ConsoleManager::showAdminMenu(DatabaseManager& db) {
             break;
         case 2:
             std::cout << "Dodawanie wydzialu..." << std::endl;
+            showAddDepartmentPrompt(db);
             break;
         case 3:
             std::cout << "Wylogowywanie..." << std::endl;
@@ -98,7 +100,8 @@ void ConsoleManager::showAddUserPrompt(DatabaseManager& db) {
     std::string haslo;
     int nrAlbumu;
     std::cout << "Podaj imie: ";
-    std::cin >> imie;
+    std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n'); // Ignoruje znaki nowej linii przed getline
+    std::getline(std::cin, imie);
     std::cout << "Podaj nr albumu: ";
     std::cin >> nrAlbumu;
     std::cout << "Podaj haslo: ";
@@ -111,7 +114,17 @@ void ConsoleManager::showAddUserPrompt(DatabaseManager& db) {
         std::cout << "Uzytkownik dodany pomyslnie!" << std::endl;
     };
 }
-
+void ConsoleManager::showAddDepartmentPrompt(DatabaseManager& db) {
+    std::string nazwa;
+    std::cout << "Podaj nazwe wydzialu: ";
+    std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n'); // Ignoruje znaki nowej linii przed getline
+    std::getline(std::cin, nazwa);
+    if(!db.addDepartment(nazwa)) {
+        std::cout << "Nie udalo sie dodac wydzialu!" << std::endl;
+    } else {
+        std::cout << "Wydzial dodany pomyslnie!" << std::endl;
+    };
+}
 void ConsoleManager::printLine(const std::string& msg) {
     std::cout << msg << std::endl;
 }

@@ -193,4 +193,25 @@ std::unique_ptr<Uzytkownik> DatabaseManager::login(int nrAlbum, const std::strin
     return user;
 }
 
+bool DatabaseManager::addDepartment(const std::string& nazwa) {
+    std::string sql = "INSERT INTO Wydzial (nazwa) VALUES (?);";
+    sqlite3_stmt* stmt = nullptr;
 
+    int rc = sqlite3_prepare_v2(db, sql.c_str(), -1, &stmt, nullptr);
+    if (rc != SQLITE_OK) {
+        std::cerr << "Blad przygotowania zapytania: " << sqlite3_errmsg(db) << std::endl;
+        return false;
+    }
+
+    sqlite3_bind_text(stmt, 1, nazwa.c_str(), -1, SQLITE_TRANSIENT);
+
+    rc = sqlite3_step(stmt);
+    if (rc != SQLITE_DONE) {
+        std::cerr << "Blad wykonania zapytania: " << sqlite3_errmsg(db) << std::endl;
+        sqlite3_finalize(stmt);
+        return false;
+    }
+
+    sqlite3_finalize(stmt);
+    return true;
+}

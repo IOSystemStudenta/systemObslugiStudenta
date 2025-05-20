@@ -21,6 +21,7 @@ public:
     bool execute(const std::string& sql);
     void createTables();
     bool addUser(int nrAlbum, const std::string& imie, const std::string& haslo, const std::string& rola);
+    bool addDepartment(const std::string& nazwa);
     sqlite3* getConnection() const;
     std::unique_ptr<Uzytkownik> login(int nrAlbum, const std::string& haslo);
 
