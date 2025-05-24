@@ -24,8 +24,8 @@ public:
     bool addDepartment(const std::string& nazwa);
     sqlite3* getConnection() const;
     std::unique_ptr<Uzytkownik> login(int nrAlbum, const std::string& haslo);
-
-
+    std::vector<std::string> getAllDepartments();
+    std::vector<std::string> getAllCoursesByDepartment(const std:string& departmentName);
 };
 
 #endif

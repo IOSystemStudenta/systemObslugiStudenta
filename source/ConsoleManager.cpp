@@ -70,6 +70,41 @@ void ConsoleManager::showLoginFailure() {
     std::cout << "Niepoprawny nr albumu lub haslo!" << std::endl;
 }
 
+void ConsoleManager::showStudentMenu(DatabaseManager& db) {
+    std::cout << "\n--- MOJE STUDIA ---" << std::endl;
+    std::cout << "1. Przegladaj wydzialy i kursy" << std::endl;
+    std::cout << "2. Moje kursy" << std::endl;
+    std::cout << "3. Wyloguj" << std::endl;
+    std::cout << "Wybierz opcje: ";
+    int choice;
+    std::cin >> choice;
+    switch (choice) {
+    case 1:
+        showAllDepartments(db);
+        // TODO: logika wybierania wydzia³u i wyœwietlenie dla niego kursów LUB zmiana powy¿szej metody, aby wyœwietla³a kursy pogrupowane wydzia³ami
+        break;
+    case 2:
+        // showAssignedCourses(db);
+        // TODO: mo¿liwoœæ przegl¹dania zawartoœci kursów i wchodzenia z nimi w interakcje
+        break;
+    case 3:
+        std::cout << "Wylogowywanie..." << std::endl;
+        break;
+    default:
+        std::cout << "Niepoprawny wybor, sprobuj ponownie." << std::endl;
+        showStudentMenu(db);
+    }
+}
+
+void ConsoleManager::showAllDepartments(DatabaseManager& db) {
+    std::vector<std::string> departments = db.getAllDepartments();
+    int id = 1;
+    for (std::vector<std::string> department : departments) {
+        std::cout << id << ". " << department << std::endl;
+        id++;
+    }
+}
+
 void ConsoleManager::showAdminMenu(DatabaseManager& db) {
     std::cout << "\n--- MENU ADMINA ---" << std::endl;
     std::cout << "1. Dodaj uzytkownika" << std::endl;
@@ -95,6 +130,7 @@ void ConsoleManager::showAdminMenu(DatabaseManager& db) {
             showAdminMenu(db); 
     }
 }
+
 void ConsoleManager::showAddUserPrompt(DatabaseManager& db) {
     std::string imie, rola;
     std::string haslo;
@@ -114,6 +150,7 @@ void ConsoleManager::showAddUserPrompt(DatabaseManager& db) {
         std::cout << "Uzytkownik dodany pomyslnie!" << std::endl;
     };
 }
+
 void ConsoleManager::showAddDepartmentPrompt(DatabaseManager& db) {
     std::string nazwa;
     std::cout << "Podaj nazwe wydzialu: ";
@@ -124,7 +161,4 @@ void ConsoleManager::showAddDepartmentPrompt(DatabaseManager& db) {
     } else {
         std::cout << "Wydzial dodany pomyslnie!" << std::endl;
     };
-}
-void ConsoleManager::printLine(const std::string& msg) {
-    std::cout << msg << std::endl;
 }

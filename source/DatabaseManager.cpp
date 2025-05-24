@@ -215,3 +215,47 @@ bool DatabaseManager::addDepartment(const std::string& nazwa) {
     sqlite3_finalize(stmt);
     return true;
 }
+
+std::vector<std::string> DatabaseManager::getAllDepartments() {
+    std::vector<std::string> departments;
+    std::string sql = "SELECT nazwa FROM Wydzial;";
+    sqlite3_stmt* stmt = nullptr;
+
+    if (sqlite3_prepare_v2(db, sql.c_str(), -1, &stmt, nullptr) != SQLITE_OK) {
+        std::cerr << "Blad przygotowania zapytania SQL: " << sqlite3_errmsg(db) << std::endl;
+        return departments;
+    }
+
+    while (sqlite3_step(stmt) == SQLITE_ROW) {
+        departments.emplace_back(reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0)));
+    }
+
+    sqlite3_finalize(stmt);
+    return departments;
+}
+
+std::vector<std::string> DatabaseManager::getAllCoursesByDepartment(const std : string & departmentName) {
+    std::vector<std::string> courses;
+    std::string sql = R"(
+        SELECT Kurs.tytul 
+        FROM Kurs 
+        INNER JOIN Wydzial ON Kurs.wydzial_id = Wydzial.id 
+        WHERE Wydzial.nazwa = ?;
+    )";
+
+    sqlite3_stmt* stmt = nullptr;
+
+    if (sqlite3_prepare_v2(db, sql.c_str(), -1, &stmt, nullptr) != SQLITE_OK) {
+        std::cerr << "Blad przygotowania zapytania SQL: " << sqlite3_errmsg(db) << std::endl;
+        return courses;
+    }
+
+    sqlite3_bind_text(stmt, 1, departmentName.c_str(), -1, SQLITE_TRANSIENT);
+
+    while (sqlite3_step(stmt) == SQLITE_ROW) {
+        courses.emplace_back(reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0)));
+    }
+
+    sqlite3_finalize(stmt);
+    return courses;
+}

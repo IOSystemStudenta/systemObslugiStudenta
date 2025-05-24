@@ -12,9 +12,10 @@ public:
     void showLoginSuccess(const std::string& imie, const std::string& rola);
     void showLoginFailure();
     void showAdminMenu(DatabaseManager& db);
+    void showStudentMenu(DatabaseManager& db);
     void showAddUserPrompt(DatabaseManager& db);
     void showAddDepartmentPrompt(DatabaseManager& db);
-    void printLine(const std::string& msg);
+    void showAllDepartments(DatabaseManager& db);
 };
 
 #endif
