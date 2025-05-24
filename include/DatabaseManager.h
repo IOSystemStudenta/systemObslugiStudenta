@@ -5,6 +5,7 @@
 #include <string>
 #include <memory>
 #include "Uzytkownik.h"
+#include "Course.h"
 
 class DatabaseManager {
 private:
@@ -26,6 +27,8 @@ public:
     std::unique_ptr<Uzytkownik> login(int nrAlbum, const std::string& haslo);
     std::vector<std::string> getAllDepartments();
     std::vector<std::string> getAllCoursesByDepartment(const std:string& departmentName);
+    std::vector<std::string> getAssignedCourses(int studentId);
+    std::unique_ptr<Course> getCourse(std::string name, int studentId);
 };
 
 #endif

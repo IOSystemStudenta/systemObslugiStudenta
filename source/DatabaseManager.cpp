@@ -259,3 +259,63 @@ std::vector<std::string> DatabaseManager::getAllCoursesByDepartment(const std : 
     sqlite3_finalize(stmt);
     return courses;
 }
+
+std::vector<std::string> DatabaseManager::getAssignedCourses(int studentId) {
+    std::vector<std::string> courses;
+    std::string sql = R"(
+        SELECT Kurs.tytul 
+        FROM Kurs 
+        INNER JOIN UczestnicyKursu ON Kurs.id = UczestnicyKursu.kurs_id 
+        INNER JOIN Uzytkownik ON UczestnicyKursu.student_id = Uzytkownik.numerAlbumu 
+        WHERE Uzytkownik.id = ?;
+    )";
+
+    sqlite3_stmt* stmt = nullptr;
+
+    if (sqlite3_prepare_v2(db, sql.c_str(), -1, &stmt, nullptr) != SQLITE_OK) {
+        std::cerr << "B³¹d przygotowania zapytania SQL: " << sqlite3_errmsg(db) << std::endl;
+        return courses;
+    }
+
+    sqlite3_bind_int(stmt, 1, studentId);
+
+    while (sqlite3_step(stmt) == SQLITE_ROW) {
+        courses.emplace_back(reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0)));
+    }
+
+    sqlite3_finalize(stmt);
+    return courses;
+}
+
+std::unique_ptr<Course> DatabaseManager::getCourse(const std::string name, int studentId) {
+    std::string sql = R"(
+        SELECT Kurs.tytul, Uzytkownik.imie, Wydzial.nazwa 
+        FROM Kurs 
+        INNER JOIN UczestnicyKursu ON Kurs.id = UczestnicyKursu.kurs_id 
+        INNER JOIN Uzytkownik ON UczestnicyKursu.student_id = Uzytkownik.id 
+        INNER JOIN Wydzial ON Kurs.wydzial_id = Wydzial.id
+        WHERE Kurs.tytul = ? AND Uzytkownik.nrAlbum = ?;
+    )";
+
+    sqlite3_stmt* stmt = nullptr;
+    std::unique_ptr<Course> course = nullptr;
+
+    if (sqlite3_prepare_v2(db, sql.c_str(), -1, &stmt, nullptr) != SQLITE_OK) {
+        std::cerr << "B³¹d przygotowania zapytania SQL: " << sqlite3_errmsg(db) << std::endl;
+        return nullptr;
+    }
+
+    sqlite3_bind_text(stmt, 1, courseName.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_int(stmt, 2, studentAlbum);
+
+    if (sqlite3_step(stmt) == SQLITE_ROW) {
+        std::string name = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0));
+        std::string prowadzacy = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1));
+        std::string department = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 2));
+
+        course = std::make_unique<Course>(name, prowadzacy, department);
+    }
+
+    sqlite3_finalize(stmt);
+    return course;
+}
