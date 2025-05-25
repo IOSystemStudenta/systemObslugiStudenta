@@ -5,16 +5,22 @@
 #include "DatabaseManager.h"
 
 class ConsoleManager {
+private:
+    DatabaseManager* db;
+
 public:
+    ConsoleManager(DatabaseManager* db);
+    ~ConsoleManager();
+
     void showWelcomeMessage();
-    void showStartMenu(DatabaseManager& db);
-    void showLoginPrompt(DatabaseManager& db);
-    void showLoginSuccess(const std::string& imie, const std::string& rola);
-    void showLoginFailure();
-    void showAdminMenu(DatabaseManager& db);
-    void showAddUserPrompt(DatabaseManager& db);
-    void showAddDepartmentPrompt(DatabaseManager& db);
-    void printLine(const std::string& msg);
+    void showStartMenu();
+    void showLoginPrompt();
+    void showAdminMenu();
+    void showStudentMenu(std::unique_ptr<Uzytkownik> user);
+    void showAddUserPrompt();
+    void showAddDepartmentPrompt();
+    void showAllDepartments();
+    void showAssignedCourses(std::unique_ptr<Uzytkownik> user);
 };
 
 #endif
