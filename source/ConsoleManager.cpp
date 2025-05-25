@@ -130,7 +130,7 @@ void ConsoleManager::showCoursePrompt() {
         for (Content c : course.content) {
             c.show();
         }
-    };
+    }
 }
 
 
