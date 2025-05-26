@@ -9,8 +9,8 @@ int main() {
     DatabaseManager db("baza_uczelnia.db");
     db.initialize();
 
-    ConsoleManager console;
+    ConsoleManager console(&db);
     console.showWelcomeMessage();
-    console.showStartMenu(db);
+    console.showStartMenu();
     return 0;
 }
