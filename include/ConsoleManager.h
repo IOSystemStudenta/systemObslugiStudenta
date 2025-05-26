@@ -12,39 +12,41 @@ private:
 public:
     ConsoleManager(DatabaseManager* db);
     void setCurrentUser(std::unique_ptr<Uzytkownik> user);
-
+    //Funkcje główne do zarządzania konsolą
     void showWelcomeMessage();
     void showStartMenu();
     void showLoginPrompt();
     void showLoginSuccess(const std::string& imie, const std::string& rola);
     void showLoginFailure();
+    //Menu dla różnych ról użytkowników
     void showAdminMenu();
+    void showStudentMenu();
+    void showProwadzacyMenu();
+    //Opcje dla administratora
     void showAddUserPrompt();
     void showAddDepartmentPrompt();
-    void printLine(const std::string& msg);
-    void showStudentMenu();
-    void showCreateKursPrompt();
+    //Opcje dla studenta
+    void showStudentChooseKursPrompt();
     void showJoinKursPrompt();
-    void showGrades();
-    void showKursPrompt();
-    void showProwadzacyMenu();
-    void showChooseKursPrompt(int kursId);
-    void showLecturerCourses();
-    void showAllCourses();
-    void showAddCourseContentPrompt(int kursId);
-    void showCourseContents(int kursId);
-    void showGradePrompt(int kursId);
-    void showCourseParticipants(int kursId);
-    void showKursPrompt(int kursId);
     void showCourseContentsForStudent(int kursId);
-    void showContentDetails(int contentId, std::string tytul, int kursId);
-    void saveSingleContentToFile(int contentId, std::string tytul, std::string zawartosc);
+    void showSubmitAssignmentPrompt(int kursId);
+    void showGrades();
+    //Opcje dla prowadzącego
+    void showInstructorManageKursPrompt(int kursId);
+    void showCreateKursPrompt();
+    void showLecturerCourses();
     void showAssignmentsForCourse(int kursId);
     void showAssignmentDetails(int assignmentId, std::string studentName, std::string filePath, int kursId);
     void showGradePromptForAssignment(int assignmentId, int kursId);
-    void showSubmitAssignmentPrompt(int kursId);
-    void showStudentChooseKursPrompt();
-    void showInstructorManageKursPrompt(int kursId);
+    //Obsługa kursów  
+    void showCourseContents(int kursId);
+    void showKursPrompt(int kursId);
+    void showAddCourseContentPrompt(int kursId);
+    void showCourseParticipants(int kursId);
+    void showGradePrompt(int kursId);
+    void showContentDetails(int contentId, std::string tytul, int kursId);
+    //Pliki
+    void saveSingleContentToFile(int contentId, std::string tytul, std::string zawartosc);
 };
 
 #endif

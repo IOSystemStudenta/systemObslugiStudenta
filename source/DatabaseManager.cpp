@@ -99,11 +99,12 @@ void DatabaseManager::createTables() {
     )";
 
     std::string zadaniaTable = R"(
-        CREATE TABLE IF NOT EXISTS Zadania (
+        CREATE TABLE Zadania (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            kurs_id INTEGER,
-            student_id INTEGER,
-            file_path TEXT,
+            kurs_id INTEGER NOT NULL,
+            student_id INTEGER NOT NULL,
+            tytul TEXT NOT NULL,
+            zawartosc TEXT NOT NULL,
             ocena INTEGER,
             FOREIGN KEY (kurs_id) REFERENCES Kurs(id),
             FOREIGN KEY (student_id) REFERENCES Uzytkownik(id)
@@ -130,6 +131,43 @@ void DatabaseManager::createTables() {
     execute(trescKursuTable);
 
     std::cout << "Wszystkie tabele zostaly utworzone." << std::endl;
+}
+
+sqlite3* DatabaseManager::getConnection() const {
+    return db;
+}
+
+// Obsluga użytkowników
+std::unique_ptr<Uzytkownik> DatabaseManager::login(int nrAlbum, const std::string& haslo) {
+    std::string sql = "SELECT id, imie, rola FROM Uzytkownik WHERE nrAlbum = ? AND haslo = ?;";
+    sqlite3_stmt* stmt = nullptr;
+
+    if (sqlite3_prepare_v2(db, sql.c_str(), -1, &stmt, nullptr) != SQLITE_OK) {
+        std::cerr << "Blad przygotowania zapytania SQL: " << sqlite3_errmsg(db) << std::endl;
+        return nullptr;
+    }
+
+    sqlite3_bind_int(stmt, 1, nrAlbum);
+    sqlite3_bind_text(stmt, 2, haslo.c_str(), -1, SQLITE_TRANSIENT);
+
+    std::unique_ptr<Uzytkownik> user = nullptr;
+
+    if (sqlite3_step(stmt) == SQLITE_ROW) {
+        int id = sqlite3_column_int(stmt, 0);
+        std::string imie = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1));
+        std::string rola = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 2));
+
+        if (rola == "admin") {
+            user = std::make_unique<Admin>(id, nrAlbum, imie, haslo);
+        } else if (rola == "student") {
+            user = std::make_unique<Student>(id, nrAlbum, imie, haslo);
+        } else if (rola == "prowadzacy") {
+            user = std::make_unique<Prowadzacy>(id, nrAlbum, imie, haslo);
+        }
+    }
+
+    sqlite3_finalize(stmt);
+    return user;
 }
 
 bool DatabaseManager::addUser(int nrAlbum, const std::string& imie, const std::string& haslo, const std::string& rola) {
@@ -173,81 +211,7 @@ bool DatabaseManager::assignUserToDepartment(int userId, int departmentId) {
     sqlite3_finalize(stmt);
     return result;
 }
-
-std::vector<int> DatabaseManager::getUserDepartments(int userId) {
-    std::vector<int> departments;
-    std::string sql = "SELECT wydzial_id FROM WydzialUzytkownik WHERE uzytkownik_id = ?;";
-    sqlite3_stmt* stmt;
-    
-    if (sqlite3_prepare_v2(db, sql.c_str(), -1, &stmt, nullptr) == SQLITE_OK) {
-        sqlite3_bind_int(stmt, 1, userId);
-        while (sqlite3_step(stmt) == SQLITE_ROW) {
-            departments.push_back(sqlite3_column_int(stmt, 0));
-        }
-        sqlite3_finalize(stmt);
-    }
-    return departments;
-}
-
-sqlite3* DatabaseManager::getConnection() const {
-    return db;
-}
-
-std::unique_ptr<Uzytkownik> DatabaseManager::login(int nrAlbum, const std::string& haslo) {
-    std::string sql = "SELECT id, imie, rola FROM Uzytkownik WHERE nrAlbum = ? AND haslo = ?;";
-    sqlite3_stmt* stmt = nullptr;
-
-    if (sqlite3_prepare_v2(db, sql.c_str(), -1, &stmt, nullptr) != SQLITE_OK) {
-        std::cerr << "Blad przygotowania zapytania SQL: " << sqlite3_errmsg(db) << std::endl;
-        return nullptr;
-    }
-
-    sqlite3_bind_int(stmt, 1, nrAlbum);
-    sqlite3_bind_text(stmt, 2, haslo.c_str(), -1, SQLITE_TRANSIENT);
-
-    std::unique_ptr<Uzytkownik> user = nullptr;
-
-    if (sqlite3_step(stmt) == SQLITE_ROW) {
-        int id = sqlite3_column_int(stmt, 0);
-        std::string imie = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1));
-        std::string rola = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 2));
-
-        if (rola == "admin") {
-            user = std::make_unique<Admin>(id, nrAlbum, imie, haslo);
-        } else if (rola == "student") {
-            user = std::make_unique<Student>(id, nrAlbum, imie, haslo);
-        } else if (rola == "prowadzacy") {
-            user = std::make_unique<Prowadzacy>(id, nrAlbum, imie, haslo);
-        }
-    }
-
-    sqlite3_finalize(stmt);
-    return user;
-}
-
-bool DatabaseManager::addDepartment(const std::string& nazwa) {
-    std::string sql = "INSERT INTO Wydzial (nazwa) VALUES (?);";
-    sqlite3_stmt* stmt = nullptr;
-
-    int rc = sqlite3_prepare_v2(db, sql.c_str(), -1, &stmt, nullptr);
-    if (rc != SQLITE_OK) {
-        std::cerr << "Blad przygotowania zapytania: " << sqlite3_errmsg(db) << std::endl;
-        return false;
-    }
-
-    sqlite3_bind_text(stmt, 1, nazwa.c_str(), -1, SQLITE_TRANSIENT);
-
-    rc = sqlite3_step(stmt);
-    if (rc != SQLITE_DONE) {
-        std::cerr << "Blad wykonania zapytania: " << sqlite3_errmsg(db) << std::endl;
-        sqlite3_finalize(stmt);
-        return false;
-    }
-
-    sqlite3_finalize(stmt);
-    return true;
-}
-
+// Zarządzanie kursami
 bool DatabaseManager::addKurs(const std::string& tytul, int prowadzacyId, int wydzialId) {
     // Sprawdź czy prowadzący jest przypisany do tego wydziału
     std::string checkSql = "SELECT 1 FROM WydzialUzytkownik WHERE uzytkownik_id = ? AND wydzial_id = ?;";
@@ -349,40 +313,30 @@ std::vector<std::pair<int, std::string>> DatabaseManager::getCoursesForStudent(i
     return courses;
 }
 
-
-std::vector<std::shared_ptr<Kurs>> DatabaseManager::getAllCourses() {
-    std::vector<std::shared_ptr<Kurs>> kursy;
-    
-    std::string query = R"(
-        SELECT K.id, K.tytul, K.prowadzacy_id, K.wydzial_id, 
-               W.nazwa, U.imie, COUNT(UK.student_id)
-        FROM Kurs K
-        JOIN Wydzial W ON K.wydzial_id = W.id
-        JOIN Uzytkownik U ON K.prowadzacy_id = U.id
-        LEFT JOIN UczestnicyKursu UK ON K.id = UK.kurs_id
-        GROUP BY K.id
-        ORDER BY K.id;
+std::vector<std::pair<int, std::string>> DatabaseManager::getAvailableCourses(int studentId) {
+    std::vector<std::pair<int, std::string>> courses;
+    std::string sql = R"(
+        SELECT K.id, K.tytul FROM Kurs K
+        WHERE K.id NOT IN (
+            SELECT UK.kurs_id FROM UczestnicyKursu UK WHERE UK.student_id = ?
+        );
     )";
-    
+
     sqlite3_stmt* stmt;
-    if (sqlite3_prepare_v2(db, query.c_str(), -1, &stmt, nullptr) == SQLITE_OK) {
+    if (sqlite3_prepare_v2(db, sql.c_str(), -1, &stmt, nullptr) == SQLITE_OK) {
+        sqlite3_bind_int(stmt, 1, studentId);
+
         while (sqlite3_step(stmt) == SQLITE_ROW) {
-            auto kurs = std::make_shared<Kurs>(
-                sqlite3_column_int(stmt, 0),
-                reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1)),
-                sqlite3_column_int(stmt, 2),
-                sqlite3_column_int(stmt, 3),
-                reinterpret_cast<const char*>(sqlite3_column_text(stmt, 4)),
-                reinterpret_cast<const char*>(sqlite3_column_text(stmt, 5)),
-                sqlite3_column_int(stmt, 6)
-            );
-            kursy.push_back(kurs);
+            int id = sqlite3_column_int(stmt, 0);
+            std::string tytul = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1));
+            courses.emplace_back(id, tytul);
         }
+
         sqlite3_finalize(stmt);
     }
-    return kursy;
+    return courses;
 }
-
+// Obsługa treści kursów
 bool DatabaseManager::addCourseContent(int kursId, const std::string& tytul, const std::string& zawartosc) {
     std::string sql = "INSERT INTO TrescKursu (kurs_id, tytul, zawartosc) VALUES (?, ?, ?);";
     sqlite3_stmt* stmt;
@@ -423,33 +377,9 @@ std::vector<std::tuple<int, std::string, std::string>> DatabaseManager::getCours
     return contents;
 }
 
-
-std::vector<std::pair<int, std::string>> DatabaseManager::getStudentsInCourse(int kursId) {
-    std::vector<std::pair<int, std::string>> students;
-    std::string sql = R"(
-        SELECT U.id, U.imie FROM UczestnicyKursu UK
-        JOIN Uzytkownik U ON UK.student_id = U.id
-        WHERE UK.kurs_id = ?;
-    )";
-
-    sqlite3_stmt* stmt;
-    if (sqlite3_prepare_v2(db, sql.c_str(), -1, &stmt, nullptr) == SQLITE_OK) {
-        sqlite3_bind_int(stmt, 1, kursId);
-
-        while (sqlite3_step(stmt) == SQLITE_ROW) {
-            int id = sqlite3_column_int(stmt, 0);
-            std::string imie = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1));
-            students.emplace_back(id, imie);
-        }
-
-        sqlite3_finalize(stmt);
-    }
-
-    return students;
-}
-
-bool DatabaseManager::addGrade(int kursId, int studentId, int ocena) {
-    std::string sql = "INSERT INTO Zadania (kurs_id, student_id, ocena) VALUES (?, ?, ?);";
+// Praca zaliczeniowa
+bool DatabaseManager::submitAssignment(int kursId, int studentId, const std::string& tytul, const std::string& zawartosc) {
+    std::string sql = "INSERT INTO Zadania (kurs_id, student_id, tytul, zawartosc) VALUES (?, ?, ?, ?);";
     sqlite3_stmt* stmt;
 
     if (sqlite3_prepare_v2(db, sql.c_str(), -1, &stmt, nullptr) != SQLITE_OK) {
@@ -459,61 +389,18 @@ bool DatabaseManager::addGrade(int kursId, int studentId, int ocena) {
 
     sqlite3_bind_int(stmt, 1, kursId);
     sqlite3_bind_int(stmt, 2, studentId);
-    sqlite3_bind_int(stmt, 3, ocena);
+    sqlite3_bind_text(stmt, 3, tytul.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text(stmt, 4, zawartosc.c_str(), -1, SQLITE_TRANSIENT);
 
     bool success = sqlite3_step(stmt) == SQLITE_DONE;
     sqlite3_finalize(stmt);
 
     return success;
 }
-
-std::vector<std::pair<int, std::string>> DatabaseManager::getAvailableCourses(int studentId) {
-    std::vector<std::pair<int, std::string>> courses;
-    std::string sql = R"(
-        SELECT K.id, K.tytul FROM Kurs K
-        WHERE K.id NOT IN (
-            SELECT UK.kurs_id FROM UczestnicyKursu UK WHERE UK.student_id = ?
-        );
-    )";
-
-    sqlite3_stmt* stmt;
-    if (sqlite3_prepare_v2(db, sql.c_str(), -1, &stmt, nullptr) == SQLITE_OK) {
-        sqlite3_bind_int(stmt, 1, studentId);
-
-        while (sqlite3_step(stmt) == SQLITE_ROW) {
-            int id = sqlite3_column_int(stmt, 0);
-            std::string tytul = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1));
-            courses.emplace_back(id, tytul);
-        }
-
-        sqlite3_finalize(stmt);
-    }
-    return courses;
-}
-
-
-bool DatabaseManager::joinCourse(int studentId, int kursId) {
-    std::string sql = "INSERT INTO UczestnicyKursu (student_id, kurs_id) VALUES (?, ?);";
-    sqlite3_stmt* stmt;
-
-    if (sqlite3_prepare_v2(db, sql.c_str(), -1, &stmt, nullptr) != SQLITE_OK) {
-        std::cerr << "Błąd SQL: " << sqlite3_errmsg(db) << std::endl;
-        return false;
-    }
-
-    sqlite3_bind_int(stmt, 1, studentId);
-    sqlite3_bind_int(stmt, 2, kursId);
-
-    bool success = sqlite3_step(stmt) == SQLITE_DONE;
-    sqlite3_finalize(stmt);
-
-    return success;
-}
-
 std::vector<std::tuple<int, std::string, std::string>> DatabaseManager::getAssignments(int kursId) {
     std::vector<std::tuple<int, std::string, std::string>> assignments;
     std::string sql = R"(
-        SELECT Z.id, U.imie, Z.file_path 
+        SELECT Z.id, U.imie, Z.zawartosc 
         FROM Zadania Z
         JOIN Uzytkownik U ON Z.student_id = U.id
         WHERE Z.kurs_id = ?;
@@ -526,8 +413,8 @@ std::vector<std::tuple<int, std::string, std::string>> DatabaseManager::getAssig
         while (sqlite3_step(stmt) == SQLITE_ROW) {
             int id = sqlite3_column_int(stmt, 0);
             std::string studentName = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1));
-            std::string filePath = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 2));
-            assignments.emplace_back(id, studentName, filePath);
+            std::string zawartosc = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 2));
+            assignments.emplace_back(id, studentName, zawartosc);
         }
 
         sqlite3_finalize(stmt);
@@ -535,6 +422,7 @@ std::vector<std::tuple<int, std::string, std::string>> DatabaseManager::getAssig
 
     return assignments;
 }
+
 
 bool DatabaseManager::addGradeForAssignment(int assignmentId, int ocena) {
     std::string sql = "UPDATE Zadania SET ocena = ? WHERE id = ?;";
@@ -554,25 +442,8 @@ bool DatabaseManager::addGradeForAssignment(int assignmentId, int ocena) {
     return success;
 }
 
-bool DatabaseManager::submitAssignment(int kursId, int studentId, const std::string& filePath) {
-    std::string sql = "INSERT INTO Zadania (kurs_id, student_id, file_path) VALUES (?, ?, ?);";
-    sqlite3_stmt* stmt;
 
-    if (sqlite3_prepare_v2(db, sql.c_str(), -1, &stmt, nullptr) != SQLITE_OK) {
-        std::cerr << "Błąd SQL: " << sqlite3_errmsg(db) << std::endl;
-        return false;
-    }
-
-    sqlite3_bind_int(stmt, 1, kursId);
-    sqlite3_bind_int(stmt, 2, studentId);
-    sqlite3_bind_text(stmt, 3, filePath.c_str(), -1, SQLITE_TRANSIENT);
-
-    bool success = sqlite3_step(stmt) == SQLITE_DONE;
-    sqlite3_finalize(stmt);
-
-    return success;
-}
-
+// Oceny
 std::vector<std::pair<std::string, int>> DatabaseManager::getStudentGrades(int studentId) {
     std::vector<std::pair<std::string, int>> grades;
     std::string sql = R"(
@@ -598,4 +469,136 @@ std::vector<std::pair<std::string, int>> DatabaseManager::getStudentGrades(int s
     return grades;
 }
 
+bool DatabaseManager::addGrade(int kursId, int studentId, int ocena) {
+    std::string sql = "INSERT INTO Zadania (kurs_id, student_id, ocena) VALUES (?, ?, ?);";
+    sqlite3_stmt* stmt;
 
+    if (sqlite3_prepare_v2(db, sql.c_str(), -1, &stmt, nullptr) != SQLITE_OK) {
+        std::cerr << "Błąd SQL: " << sqlite3_errmsg(db) << std::endl;
+        return false;
+    }
+
+    sqlite3_bind_int(stmt, 1, kursId);
+    sqlite3_bind_int(stmt, 2, studentId);
+    sqlite3_bind_int(stmt, 3, ocena);
+
+    bool success = sqlite3_step(stmt) == SQLITE_DONE;
+    sqlite3_finalize(stmt);
+
+    return success;
+}
+
+
+
+std::vector<int> DatabaseManager::getUserDepartments(int userId) {
+    std::vector<int> departments;
+    std::string sql = "SELECT wydzial_id FROM WydzialUzytkownik WHERE uzytkownik_id = ?;";
+    sqlite3_stmt* stmt;
+    
+    if (sqlite3_prepare_v2(db, sql.c_str(), -1, &stmt, nullptr) == SQLITE_OK) {
+        sqlite3_bind_int(stmt, 1, userId);
+        while (sqlite3_step(stmt) == SQLITE_ROW) {
+            departments.push_back(sqlite3_column_int(stmt, 0));
+        }
+        sqlite3_finalize(stmt);
+    }
+    return departments;
+}
+
+bool DatabaseManager::addDepartment(const std::string& nazwa) {
+    std::string sql = "INSERT INTO Wydzial (nazwa) VALUES (?);";
+    sqlite3_stmt* stmt = nullptr;
+
+    int rc = sqlite3_prepare_v2(db, sql.c_str(), -1, &stmt, nullptr);
+    if (rc != SQLITE_OK) {
+        std::cerr << "Blad przygotowania zapytania: " << sqlite3_errmsg(db) << std::endl;
+        return false;
+    }
+
+    sqlite3_bind_text(stmt, 1, nazwa.c_str(), -1, SQLITE_TRANSIENT);
+
+    rc = sqlite3_step(stmt);
+    if (rc != SQLITE_DONE) {
+        std::cerr << "Blad wykonania zapytania: " << sqlite3_errmsg(db) << std::endl;
+        sqlite3_finalize(stmt);
+        return false;
+    }
+
+    sqlite3_finalize(stmt);
+    return true;
+}
+
+std::vector<std::shared_ptr<Kurs>> DatabaseManager::getAllCourses() {
+    std::vector<std::shared_ptr<Kurs>> kursy;
+    
+    std::string query = R"(
+        SELECT K.id, K.tytul, K.prowadzacy_id, K.wydzial_id, 
+               W.nazwa, U.imie, COUNT(UK.student_id)
+        FROM Kurs K
+        JOIN Wydzial W ON K.wydzial_id = W.id
+        JOIN Uzytkownik U ON K.prowadzacy_id = U.id
+        LEFT JOIN UczestnicyKursu UK ON K.id = UK.kurs_id
+        GROUP BY K.id
+        ORDER BY K.id;
+    )";
+    
+    sqlite3_stmt* stmt;
+    if (sqlite3_prepare_v2(db, query.c_str(), -1, &stmt, nullptr) == SQLITE_OK) {
+        while (sqlite3_step(stmt) == SQLITE_ROW) {
+            auto kurs = std::make_shared<Kurs>(
+                sqlite3_column_int(stmt, 0),
+                reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1)),
+                sqlite3_column_int(stmt, 2),
+                sqlite3_column_int(stmt, 3),
+                reinterpret_cast<const char*>(sqlite3_column_text(stmt, 4)),
+                reinterpret_cast<const char*>(sqlite3_column_text(stmt, 5)),
+                sqlite3_column_int(stmt, 6)
+            );
+            kursy.push_back(kurs);
+        }
+        sqlite3_finalize(stmt);
+    }
+    return kursy;
+}
+
+std::vector<std::pair<int, std::string>> DatabaseManager::getStudentsInCourse(int kursId) {
+    std::vector<std::pair<int, std::string>> students;
+    std::string sql = R"(
+        SELECT U.id, U.imie FROM UczestnicyKursu UK
+        JOIN Uzytkownik U ON UK.student_id = U.id
+        WHERE UK.kurs_id = ?;
+    )";
+
+    sqlite3_stmt* stmt;
+    if (sqlite3_prepare_v2(db, sql.c_str(), -1, &stmt, nullptr) == SQLITE_OK) {
+        sqlite3_bind_int(stmt, 1, kursId);
+
+        while (sqlite3_step(stmt) == SQLITE_ROW) {
+            int id = sqlite3_column_int(stmt, 0);
+            std::string imie = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1));
+            students.emplace_back(id, imie);
+        }
+
+        sqlite3_finalize(stmt);
+    }
+
+    return students;
+}
+
+bool DatabaseManager::joinCourse(int studentId, int kursId) {
+    std::string sql = "INSERT INTO UczestnicyKursu (student_id, kurs_id) VALUES (?, ?);";
+    sqlite3_stmt* stmt;
+
+    if (sqlite3_prepare_v2(db, sql.c_str(), -1, &stmt, nullptr) != SQLITE_OK) {
+        std::cerr << "Błąd SQL: " << sqlite3_errmsg(db) << std::endl;
+        return false;
+    }
+
+    sqlite3_bind_int(stmt, 1, studentId);
+    sqlite3_bind_int(stmt, 2, kursId);
+
+    bool success = sqlite3_step(stmt) == SQLITE_DONE;
+    sqlite3_finalize(stmt);
+
+    return success;
+}
