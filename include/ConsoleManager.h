@@ -25,13 +25,26 @@ public:
     void showStudentMenu();
     void showCreateKursPrompt();
     void showJoinKursPrompt();
-    void showKursPrompt();
     void showGrades();
+    void showKursPrompt();
     void showProwadzacyMenu();
     void showChooseKursPrompt(int kursId);
     void showLecturerCourses();
     void showAllCourses();
     void showAddCourseContentPrompt(int kursId);
+    void showCourseContents(int kursId);
+    void showGradePrompt(int kursId);
+    void showCourseParticipants(int kursId);
+    void showKursPrompt(int kursId);
+    void showCourseContentsForStudent(int kursId);
+    void showContentDetails(int contentId, std::string tytul, int kursId);
+    void saveSingleContentToFile(int contentId, std::string tytul, std::string zawartosc);
+    void showAssignmentsForCourse(int kursId);
+    void showAssignmentDetails(int assignmentId, std::string studentName, std::string filePath, int kursId);
+    void showGradePromptForAssignment(int assignmentId, int kursId);
+    void showSubmitAssignmentPrompt(int kursId);
+    void showStudentChooseKursPrompt();
+    void showInstructorManageKursPrompt(int kursId);
 };
 
 #endif

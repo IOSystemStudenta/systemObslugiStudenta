@@ -250,7 +250,7 @@ void ConsoleManager::showStudentMenu() {
             break;
         case 2:
             std::cout << "Wybierz kurs:" << std::endl;
-            showKursPrompt();
+            showStudentChooseKursPrompt();
             break;
         case 3:
             std::cout << "Wyswietlanie ocen..." << std::endl;
@@ -258,6 +258,8 @@ void ConsoleManager::showStudentMenu() {
             break;
         case 4:
             std::cout << "Wylogowywanie..." << std::endl;
+            setCurrentUser(nullptr); // Wyloguj użytkownika
+            showStartMenu(); // Powrót do menu startowego
             break;
         default:
             std::cout << "Niepoprawny wybor, sprobuj ponownie." << std::endl;
@@ -267,54 +269,136 @@ void ConsoleManager::showStudentMenu() {
 
 void ConsoleManager::showJoinKursPrompt() {
     if (!currentUser) return;
-
-    sqlite3* conn = db->getConnection();
-    std::string query = "SELECT id, tytul FROM Kurs;";
-    sqlite3_stmt* stmt;
     
-    if (sqlite3_prepare_v2(conn, query.c_str(), -1, &stmt, nullptr) != SQLITE_OK) {
-        std::cerr << "Blad zapytania: " << sqlite3_errmsg(conn) << std::endl;
+    auto courses = db->getAvailableCourses(currentUser->getId()); // Pobieramy dostępne kursy
+    
+    std::cout << "\n--- DOSTĘPNE KURSY ---\n";
+    
+    if (courses.empty()) {
+        std::cout << "Brak dostępnych kursów do dołączenia." << std::endl;
+        showStudentMenu();
         return;
     }
 
-    std::cout << "Dostepne kursy:\n";
-    while (sqlite3_step(stmt) == SQLITE_ROW) {
-        int id = sqlite3_column_int(stmt, 0);
-        std::string tytul = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1));
-        std::cout << id << ". " << tytul << "\n";
+    std::cout << "ID | Tytuł kursu\n";
+    std::cout << "------------------\n";
+    for (const auto& course : courses) {
+        std::cout << course.first << " | " << course.second << std::endl;
     }
-    sqlite3_finalize(stmt);
 
-    std::cout << "Podaj ID kursu do dolaczenia: ";
+    std::cout << "Podaj ID kursu do dołączenia: ";
     int kursId;
     std::cin >> kursId;
 
-    std::string insert = "INSERT INTO UczestnicyKursu (student_id, kurs_id) VALUES (?, ?);";
-    if (sqlite3_prepare_v2(conn, insert.c_str(), -1, &stmt, nullptr) != SQLITE_OK) {
-        std::cerr << "Blad przygotowania INSERT: " << sqlite3_errmsg(conn) << std::endl;
+    // Sprawdzamy, czy kurs jest dostępny
+    auto it = std::find_if(courses.begin(), courses.end(), [kursId](const auto& c) {
+        return c.first == kursId;
+    });
+
+    if (it == courses.end()) {
+        std::cout << "Niepoprawne ID kursu! Spróbuj ponownie." << std::endl;
+        showJoinKursPrompt();
         return;
     }
 
-    sqlite3_bind_int(stmt, 1, currentUser->getId());
-    sqlite3_bind_int(stmt, 2, kursId);
-
-    if (sqlite3_step(stmt) != SQLITE_DONE) {
-        std::cerr << "Nie udalo sie dolaczyc do kursu: " << sqlite3_errmsg(conn) << std::endl;
+    // Korzystamy z funkcji `joinCourse` w `DatabaseManager`
+    if (db->joinCourse(currentUser->getId(), kursId)) {
+        std::cout << "Dołączono do kursu: " << it->second << " pomyślnie!" << std::endl;
     } else {
-        std::cout << "Dolaczono do kursu pomyslnie!" << std::endl;
+        std::cout << "Nie udało się dołączyć do kursu." << std::endl;
     }
 
-    sqlite3_finalize(stmt);
+    showStudentMenu();
+}
+
+void ConsoleManager::showStudentChooseKursPrompt() {
+    std::cout << "\n--- WYBIERZ KURS ---\n";
+
+    auto courses = db->getCoursesForStudent(currentUser->getId());
+
+    if (courses.empty()) {
+        std::cout << "Nie jesteś zapisany na żaden kurs." << std::endl;
+        showStudentMenu();
+        return;
+    }
+
+    std::cout << "ID | Tytuł kursu\n";
+    std::cout << "------------------\n";
+    for (const auto& course : courses) {
+        std::cout << course.first << " | " << course.second << std::endl;
+    }
+
+    std::cout << "Podaj ID kursu, który chcesz otworzyć: ";
+    int kursId;
+    std::cin >> kursId;
+
+    auto it = std::find_if(courses.begin(), courses.end(), [kursId](const auto& c) {
+        return c.first == kursId;
+    });
+
+    if (it == courses.end()) {
+        std::cout << "Niepoprawne ID kursu! Spróbuj ponownie." << std::endl;
+        showStudentChooseKursPrompt();
+        return;
+    }
+
+    showKursPrompt(kursId); // Przechodzimy do strony kursu
 }
 
 
-void ConsoleManager::showKursPrompt() {
 
+void ConsoleManager::showKursPrompt(int kursId) {
+    std::cout << "\n--- STRONA KURSU ---\n";
+    std::cout << "1. Wyświetl treści kursu" << std::endl;
+    std::cout << "2. Prześlij pracę zaliczeniową" << std::endl;
+    std::cout << "3. Powrót do menu" << std::endl;
+    std::cout << "Wybierz opcję: ";
+
+    int choice;
+    std::cin >> choice;
+
+    switch (choice) {
+        case 1:
+            showCourseContentsForStudent(kursId);
+            break;
+        case 2:
+            showSubmitAssignmentPrompt(kursId);
+            break;
+        case 3:
+            showStudentMenu();
+            break;
+        default:
+            std::cout << "Niepoprawny wybór! Spróbuj ponownie." << std::endl;
+            showKursPrompt(kursId);
+    }
 }
+
+
 
 void ConsoleManager::showGrades() {
+    std::cout << "\n--- TWOJE OCENY ---\n";
 
+    auto grades = db->getStudentGrades(currentUser->getId());
+
+    if (grades.empty()) {
+        std::cout << "Nie masz jeszcze żadnych ocen." << std::endl;
+        showStudentMenu();
+        return;
+    }
+
+    std::cout << "Kurs | Ocena\n";
+    std::cout << "------------------\n";
+    for (const auto& grade : grades) {
+        std::cout << grade.first << " | " << grade.second << std::endl;
+    }
+
+    std::cout << "\nNaciśnij Enter, aby wrócić do menu...";
+    std::cin.ignore();
+    std::cin.get();
+    
+    showStudentMenu();
 }
+
 
 // Prowadzacy
 void ConsoleManager::showProwadzacyMenu() {
@@ -335,7 +419,6 @@ void ConsoleManager::showProwadzacyMenu() {
         case 2:
             std::cout << "Wyswietl kurs:" << std::endl;
             showLecturerCourses();
-            //showChooseKursPrompt();
             showProwadzacyMenu();
             break;
         case 3:
@@ -356,7 +439,7 @@ void ConsoleManager::showProwadzacyMenu() {
 }
 
 
-void ConsoleManager::showChooseKursPrompt(int kursId) {
+void ConsoleManager::showInstructorManageKursPrompt(int kursId) {
     std::cout << "\n--- ZARZĄDZANIE KURSEM ---\n";
     std::cout << "1. Dodaj treść do kursu\n";
     std::cout << "2. Wyświetl istniejące treści\n";
@@ -370,28 +453,23 @@ void ConsoleManager::showChooseKursPrompt(int kursId) {
 
     switch (choice) {
         case 1:
-            std::cout << "Dodawanie treści do kursu..." << std::endl;
             showAddCourseContentPrompt(kursId);
             break;
         case 2:
-            std::cout << "Wyświetlanie dodanych treści..." << std::endl;
-            //showCourseContents(kursId);
+            showCourseContents(kursId);
             break;
         case 3:
-            std::cout << "Wystawianie ocen..." << std::endl;
-            // Wywołanie funkcji do oceniania studentów
+            showGradePrompt(kursId);
             break;
         case 4:
-            std::cout << "Lista uczestników kursu:" << std::endl;
-            // Wywołanie funkcji do wyświetlania uczestników
+            showCourseParticipants(kursId);
             break;
         case 5:
-            std::cout << "Powrót do listy kursów..." << std::endl;
             showLecturerCourses();
             break;
         default:
             std::cout << "Niepoprawny wybór. Spróbuj ponownie." << std::endl;
-            showChooseKursPrompt(kursId);
+            showInstructorManageKursPrompt(kursId);
     }
 }
 
@@ -408,7 +486,7 @@ void ConsoleManager::showLecturerCourses() {
     std::cout << "==========================================================\n";
 
     if (kursy.empty()) {
-        std::cout << "| Brak prowadzonych kursów                              |\n";
+        std::cout << "| Brak prowadzonych kursow                              |\n";
     } else {
         for (const auto& kurs : kursy) {
             printf("| %-3d | %-20s | %-15s | %-15d |\n", 
@@ -421,7 +499,7 @@ void ConsoleManager::showLecturerCourses() {
     std::cout << "==========================================================\n";
 
     // Zapytanie użytkownika o wybór kursu
-    std::cout << "\nPodaj ID kursu, aby zobaczyć szczegóły: ";
+    std::cout << "\nPodaj ID kursu, aby zobaczyć szczegoly: ";
     int kursId;
     std::cin >> kursId;
 
@@ -432,9 +510,9 @@ void ConsoleManager::showLecturerCourses() {
 
     if (it != kursy.end()) {
         std::cout << "Przechodzenie do karty kursu: " << (*it)->getTytul() << std::endl;
-        showChooseKursPrompt(kursId); // Wywołanie funkcji do zarządzania kursem
+        showInstructorManageKursPrompt(kursId); // Wywołanie funkcji do zarządzania kursem
     } else {
-        std::cout << "Niepoprawne ID kursu! Spróbuj ponownie." << std::endl;
+        std::cout << "Niepoprawne ID kursu! Sprobuj ponownie." << std::endl;
         showLecturerCourses();
     }
 }
@@ -445,7 +523,7 @@ void ConsoleManager::showAllCourses() {
     
     std::cout << "\nWSZYSTKIE KURSY:\n";
     std::cout << "=================================================================\n";
-    std::cout << "| ID  | Tytuł kursu\t\t| Wydział\t| Prowadzący     |\n";
+    std::cout << "| ID  | Tytul kursu\t\t| Wydzial\t| Prowadzacy     |\n";
     std::cout << "=================================================================\n";
     
     for (const auto& kurs : kursy) {
@@ -459,22 +537,324 @@ void ConsoleManager::showAllCourses() {
 }
 
 void ConsoleManager::showAddCourseContentPrompt(int kursId) {
-    std::cout << "\n--- DODAWANIE TREŚCI DO KURSU ---\n";
+    std::cout << "\n--- DODAWANIE TRESCI DO KURSU ---\n";
     
     std::string tytul, zawartosc;
     
-    std::cout << "Podaj tytuł treści: ";
+    std::cout << "Podaj tytul tresci: ";
     std::cin.ignore();
     std::getline(std::cin, tytul);
 
-    std::cout << "Podaj zawartość treści: ";
+    std::cout << "Podaj zawartosc tresci: ";
     std::getline(std::cin, zawartosc);
 
     if (db->addCourseContent(kursId, tytul, zawartosc)) {
-        std::cout << "Treść została dodana pomyślnie!" << std::endl;
+        std::cout << "Tresc została dodana pomyslnie!" << std::endl;
     } else {
-        std::cout << "Nie udało się dodać treści!" << std::endl;
+        std::cout << "Nie udalo się dodac tresci!" << std::endl;
     }
 
-    showChooseKursPrompt(kursId);
+    showInstructorManageKursPrompt(kursId);
+}
+
+void ConsoleManager::showCourseContents(int kursId) {
+    std::cout << "\n--- TRESCI KURSU ---\n";
+
+    auto contents = db->getCourseContents(kursId);
+
+    if (contents.empty()) {
+        std::cout << "Brak dodanych tresci dla tego kursu." << std::endl;
+    } else {
+        for (const auto& content : contents) {
+            std::cout << "\nTytul: " << std::get<0>(content) << std::endl;
+            std::cout << "Tresc: " << std::get<1>(content) << std::endl;
+            std::cout << "---------------------------------------" << std::endl;
+        }
+    }
+
+    // Powrót do menu kursu
+    showStudentChooseKursPrompt();
+}
+
+void ConsoleManager::showGradePrompt(int kursId) {
+    std::cout << "\n--- WYSTAWIANIE OCEN ---\n";
+
+    auto students = db->getStudentsInCourse(kursId);
+
+    if (students.empty()) {
+        std::cout << "Brak zapisanych studentow na ten kurs." << std::endl;
+        showInstructorManageKursPrompt(kursId);
+        return;
+    }
+
+    std::cout << "Lista studentow:\n";
+    for (const auto& student : students) {
+        std::cout << student.first << ". " << student.second << std::endl;
+    }
+
+    std::cout << "Podaj ID studenta, ktoremu chcesz wystawic ocene: ";
+    int studentId;
+    std::cin >> studentId;
+
+    auto it = std::find_if(students.begin(), students.end(), [studentId](const auto& s) {
+        return s.first == studentId;
+    });
+
+    if (it == students.end()) {
+        std::cout << "Niepoprawne ID studenta! Sprobuj ponownie." << std::endl;
+        showGradePrompt(kursId);
+        return;
+    }
+
+    std::cout << "Podaj ocene dla " << it->second << ": ";
+    int ocena;
+    std::cin >> ocena;
+
+    if (db->addGrade(kursId, studentId, ocena)) {
+        std::cout << "Ocena została pomyslnie wystawiona!" << std::endl;
+    } else {
+        std::cout << "Nie udalo sie wystawic oceny!" << std::endl;
+    }
+
+    showInstructorManageKursPrompt(kursId);
+}
+
+void ConsoleManager::showCourseParticipants(int kursId) {
+    std::cout << "\n--- LISTA UCZESTNIKOW KURSU ---\n";
+
+    auto participants = db->getStudentsInCourse(kursId); // Używamy istniejącej funkcji!
+
+    if (participants.empty()) {
+        std::cout << "Brak studentow zapisanych na ten kurs." << std::endl;
+    } else {
+        std::cout << "ID | Imie studenta\n";
+        std::cout << "------------------\n";
+        for (const auto& participant : participants) {
+            std::cout << participant.first << " | " << participant.second << std::endl;
+        }
+    }
+
+    showInstructorManageKursPrompt(kursId);
+}
+
+/*void ConsoleManager::showJoinKursPrompt() {
+    if (!currentUser || currentUser->getRola() != "student") return;
+
+    std::cout << "\n--- DOSTĘPNE KURSY ---\n";
+
+    auto courses = db->getAvailableCourses();
+
+    if (courses.empty()) {
+        std::cout << "Brak dostępnych kursów do dołączenia." << std::endl;
+        showStudentMenu();
+        return;
+    }
+
+    std::cout << "ID | Tytuł kursu\n";
+    std::cout << "------------------\n";
+    for (const auto& course : courses) {
+        std::cout << course.first << " | " << course.second << std::endl;
+    }
+
+    std::cout << "Podaj ID kursu, do którego chcesz dołączyć: ";
+    int kursId;
+    std::cin >> kursId;
+
+    auto it = std::find_if(courses.begin(), courses.end(), [kursId](const auto& c) {
+        return c.first == kursId;
+    });
+
+    if (it == courses.end()) {
+        std::cout << "Niepoprawne ID kursu! Spróbuj ponownie." << std::endl;
+        showJoinKursPrompt();
+        return;
+    }
+
+    if (db->joinCourse(currentUser->getId(), kursId)) {
+        std::cout << "Dołączono do kursu: " << it->second << " pomyślnie!" << std::endl;
+    } else {
+        std::cout << "Nie udało się dołączyć do kursu." << std::endl;
+    }
+
+    showStudentMenu();
+}*/
+
+void ConsoleManager::showCourseContentsForStudent(int kursId) {
+    std::cout << "\n--- DOSTĘPNE TREŚCI KURSU ---\n";
+
+    auto contents = db->getCourseContents(kursId);
+
+    if (contents.empty()) {
+        std::cout << "Brak dodanych materiałów." << std::endl;
+        showStudentMenu();
+        return;
+    }
+
+    std::cout << "ID | Tytuł treści\n";
+    std::cout << "------------------\n";
+    for (const auto& content : contents) {
+        std::cout << std::get<0>(content) << " | " << std::get<1>(content) << std::endl;
+    }
+
+    std::cout << "Podaj ID treści, aby zobaczyć szczegóły: ";
+    int contentId;
+    std::cin >> contentId;
+
+    auto it = std::find_if(contents.begin(), contents.end(), [contentId](const auto& c) {
+    return std::get<0>(c) == contentId;
+});
+
+    if (it == contents.end()) {
+        std::cout << "Niepoprawne ID treści! Spróbuj ponownie." << std::endl;
+        showCourseContentsForStudent(kursId);
+        return;
+    }
+
+    showContentDetails(std::get<0>(*it), std::get<1>(*it), kursId);
+}
+
+void ConsoleManager::showContentDetails(int contentId, std::string tytul, int kursId) {
+    std::cout << "\n--- SZCZEGÓŁY TREŚCI ---\n";
+    std::cout << "📌 " << tytul << std::endl;
+
+    auto contents = db->getCourseContents(kursId);
+    auto it = std::find_if(contents.begin(), contents.end(), [contentId](const auto& c) {
+        return std::get<0>(c) == contentId;
+    });
+
+    if (it != contents.end()) {
+        std::cout << std::get<1>(*it) << std::endl;
+    }
+
+    std::cout << "---------------------------------------\n";
+    std::cout << "1. Pobierz treść jako plik .txt\n";
+    std::cout << "2. Powrót do listy treści\n";
+    std::cout << "Wybierz opcję: ";
+
+    int choice;
+    std::cin >> choice;
+
+    switch (choice) {
+        case 1:
+            saveSingleContentToFile(contentId, tytul, std::get<1>(*it));
+            break;
+        case 2:
+            showCourseContentsForStudent(kursId);
+            break;
+        default:
+            std::cout << "Niepoprawny wybór! Spróbuj ponownie." << std::endl;
+            showContentDetails(contentId, tytul, kursId);
+    }
+}
+
+#include <fstream>
+
+void ConsoleManager::saveSingleContentToFile(int contentId, std::string tytul, std::string zawartosc) {
+    std::string fileName = tytul + ".txt";
+    std::ofstream file(fileName);
+
+    if (file.is_open()) {
+        file << zawartosc;
+        file.close();
+        std::cout << "Plik zapisany: " << fileName << std::endl;
+    } else {
+        std::cout << "Nie udało się utworzyć pliku: " << fileName << std::endl;
+    }
+
+    showStudentMenu();
+}
+
+void ConsoleManager::showAssignmentsForCourse(int kursId) {
+    std::cout << "\n--- PRACE ZALICZENIOWE ---\n";
+
+    auto assignments = db->getAssignments(kursId);
+
+    if (assignments.empty()) {
+        std::cout << "Brak przesłanych prac dla tego kursu." << std::endl;
+        showInstructorManageKursPrompt(kursId);
+        return;
+    }
+
+    std::cout << "ID | Student | Ścieżka pliku\n";
+    std::cout << "--------------------------------------\n";
+    for (const auto& assignment : assignments) {
+        std::cout << std::get<0>(assignment) << " | " << std::get<1>(assignment) 
+                  << " | " << std::get<2>(assignment) << std::endl;
+    }
+
+    std::cout << "\nPodaj ID pracy, aby zobaczyć szczegóły: ";
+    int assignmentId;
+    std::cin >> assignmentId;
+
+    auto it = std::find_if(assignments.begin(), assignments.end(), [assignmentId](const auto& a) {
+        return std::get<0>(a) == assignmentId;
+    });
+
+    if (it == assignments.end()) {
+        std::cout << "Niepoprawne ID pracy! Spróbuj ponownie." << std::endl;
+        showAssignmentsForCourse(kursId);
+        return;
+    }
+
+    showAssignmentDetails(std::get<0>(*it), std::get<1>(*it), std::get<2>(*it), kursId);
+}
+
+void ConsoleManager::showAssignmentDetails(int assignmentId, std::string studentName, std::string filePath, int kursId) {
+    std::cout << "\n--- SZCZEGÓŁY PRACY ---\n";
+    std::cout << "📌 Student: " << studentName << std::endl;
+    std::cout << "📄 Plik: " << filePath << std::endl;
+    std::cout << "---------------------------------------\n";
+    std::cout << "1. Pobierz pracę\n";
+    std::cout << "2. Wystaw ocenę\n";
+    std::cout << "3. Powrót do listy prac\n";
+    std::cout << "Wybierz opcję: ";
+
+    int choice;
+    std::cin >> choice;
+
+    switch (choice) {
+        case 1:
+            std::cout << "Pobieranie pliku: " << filePath << std::endl;
+            // Możesz dodać kod do rzeczywistego pobierania pliku
+            break;
+        case 2:
+            showGradePromptForAssignment(assignmentId, kursId);
+            break;
+        case 3:
+            showAssignmentsForCourse(kursId);
+            break;
+        default:
+            std::cout << "Niepoprawny wybór! Spróbuj ponownie." << std::endl;
+            showAssignmentDetails(assignmentId, studentName, filePath, kursId);
+    }
+}
+
+void ConsoleManager::showGradePromptForAssignment(int assignmentId, int kursId) {
+    std::cout << "\nPodaj ocenę dla tej pracy: ";
+    int ocena;
+    std::cin >> ocena;
+
+    if (db->addGradeForAssignment(assignmentId, ocena)) {
+        std::cout << "Ocena wystawiona pomyślnie!" << std::endl;
+    } else {
+        std::cout << "Nie udało się wystawić oceny." << std::endl;
+    }
+
+    showAssignmentsForCourse(kursId);
+}
+
+void ConsoleManager::showSubmitAssignmentPrompt(int kursId) {
+    std::cout << "\n--- PRZESYŁANIE PRACY ZALICZENIOWEJ ---\n";
+
+    std::cout << "Podaj ścieżkę do pliku (np. C:/PraceZaliczeniowe/praca.pdf): ";
+    std::string filePath;
+    std::cin >> filePath;
+
+    if (db->submitAssignment(kursId, currentUser->getId(), filePath)) {
+        std::cout << "Praca zaliczeniowa została pomyślnie przesłana!" << std::endl;
+    } else {
+        std::cout << "Nie udało się przesłać pracy zaliczeniowej." << std::endl;
+    }
+
+    showStudentMenu();
 }

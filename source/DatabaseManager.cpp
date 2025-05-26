@@ -325,6 +325,31 @@ std::vector<std::shared_ptr<Kurs>> DatabaseManager::getCoursesByLecturer(int lec
     return kursy;
 }
 
+std::vector<std::pair<int, std::string>> DatabaseManager::getCoursesForStudent(int studentId) {
+    std::vector<std::pair<int, std::string>> courses;
+    std::string sql = R"(
+        SELECT K.id, K.tytul FROM UczestnicyKursu UK
+        JOIN Kurs K ON UK.kurs_id = K.id
+        WHERE UK.student_id = ?;
+    )";
+
+    sqlite3_stmt* stmt;
+    if (sqlite3_prepare_v2(db, sql.c_str(), -1, &stmt, nullptr) == SQLITE_OK) {
+        sqlite3_bind_int(stmt, 1, studentId);
+
+        while (sqlite3_step(stmt) == SQLITE_ROW) {
+            int id = sqlite3_column_int(stmt, 0);
+            std::string tytul = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1));
+            courses.emplace_back(id, tytul);
+        }
+
+        sqlite3_finalize(stmt);
+    }
+
+    return courses;
+}
+
+
 std::vector<std::shared_ptr<Kurs>> DatabaseManager::getAllCourses() {
     std::vector<std::shared_ptr<Kurs>> kursy;
     
@@ -376,3 +401,201 @@ bool DatabaseManager::addCourseContent(int kursId, const std::string& tytul, con
 
     return success;
 }
+
+std::vector<std::tuple<int, std::string, std::string>> DatabaseManager::getCourseContents(int kursId) {
+    std::vector<std::tuple<int, std::string, std::string>> contents;
+    std::string sql = "SELECT id, tytul, zawartosc FROM TrescKursu WHERE kurs_id = ?;";
+    sqlite3_stmt* stmt;
+
+    if (sqlite3_prepare_v2(db, sql.c_str(), -1, &stmt, nullptr) == SQLITE_OK) {
+        sqlite3_bind_int(stmt, 1, kursId);
+
+        while (sqlite3_step(stmt) == SQLITE_ROW) {
+            int id = sqlite3_column_int(stmt, 0);
+            std::string tytul = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1));
+            std::string zawartosc = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 2));
+            contents.emplace_back(id, tytul, zawartosc);
+        }
+
+        sqlite3_finalize(stmt);
+    }
+
+    return contents;
+}
+
+
+std::vector<std::pair<int, std::string>> DatabaseManager::getStudentsInCourse(int kursId) {
+    std::vector<std::pair<int, std::string>> students;
+    std::string sql = R"(
+        SELECT U.id, U.imie FROM UczestnicyKursu UK
+        JOIN Uzytkownik U ON UK.student_id = U.id
+        WHERE UK.kurs_id = ?;
+    )";
+
+    sqlite3_stmt* stmt;
+    if (sqlite3_prepare_v2(db, sql.c_str(), -1, &stmt, nullptr) == SQLITE_OK) {
+        sqlite3_bind_int(stmt, 1, kursId);
+
+        while (sqlite3_step(stmt) == SQLITE_ROW) {
+            int id = sqlite3_column_int(stmt, 0);
+            std::string imie = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1));
+            students.emplace_back(id, imie);
+        }
+
+        sqlite3_finalize(stmt);
+    }
+
+    return students;
+}
+
+bool DatabaseManager::addGrade(int kursId, int studentId, int ocena) {
+    std::string sql = "INSERT INTO Zadania (kurs_id, student_id, ocena) VALUES (?, ?, ?);";
+    sqlite3_stmt* stmt;
+
+    if (sqlite3_prepare_v2(db, sql.c_str(), -1, &stmt, nullptr) != SQLITE_OK) {
+        std::cerr << "Błąd SQL: " << sqlite3_errmsg(db) << std::endl;
+        return false;
+    }
+
+    sqlite3_bind_int(stmt, 1, kursId);
+    sqlite3_bind_int(stmt, 2, studentId);
+    sqlite3_bind_int(stmt, 3, ocena);
+
+    bool success = sqlite3_step(stmt) == SQLITE_DONE;
+    sqlite3_finalize(stmt);
+
+    return success;
+}
+
+std::vector<std::pair<int, std::string>> DatabaseManager::getAvailableCourses(int studentId) {
+    std::vector<std::pair<int, std::string>> courses;
+    std::string sql = R"(
+        SELECT K.id, K.tytul FROM Kurs K
+        WHERE K.id NOT IN (
+            SELECT UK.kurs_id FROM UczestnicyKursu UK WHERE UK.student_id = ?
+        );
+    )";
+
+    sqlite3_stmt* stmt;
+    if (sqlite3_prepare_v2(db, sql.c_str(), -1, &stmt, nullptr) == SQLITE_OK) {
+        sqlite3_bind_int(stmt, 1, studentId);
+
+        while (sqlite3_step(stmt) == SQLITE_ROW) {
+            int id = sqlite3_column_int(stmt, 0);
+            std::string tytul = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1));
+            courses.emplace_back(id, tytul);
+        }
+
+        sqlite3_finalize(stmt);
+    }
+    return courses;
+}
+
+
+bool DatabaseManager::joinCourse(int studentId, int kursId) {
+    std::string sql = "INSERT INTO UczestnicyKursu (student_id, kurs_id) VALUES (?, ?);";
+    sqlite3_stmt* stmt;
+
+    if (sqlite3_prepare_v2(db, sql.c_str(), -1, &stmt, nullptr) != SQLITE_OK) {
+        std::cerr << "Błąd SQL: " << sqlite3_errmsg(db) << std::endl;
+        return false;
+    }
+
+    sqlite3_bind_int(stmt, 1, studentId);
+    sqlite3_bind_int(stmt, 2, kursId);
+
+    bool success = sqlite3_step(stmt) == SQLITE_DONE;
+    sqlite3_finalize(stmt);
+
+    return success;
+}
+
+std::vector<std::tuple<int, std::string, std::string>> DatabaseManager::getAssignments(int kursId) {
+    std::vector<std::tuple<int, std::string, std::string>> assignments;
+    std::string sql = R"(
+        SELECT Z.id, U.imie, Z.file_path 
+        FROM Zadania Z
+        JOIN Uzytkownik U ON Z.student_id = U.id
+        WHERE Z.kurs_id = ?;
+    )";
+
+    sqlite3_stmt* stmt;
+    if (sqlite3_prepare_v2(db, sql.c_str(), -1, &stmt, nullptr) == SQLITE_OK) {
+        sqlite3_bind_int(stmt, 1, kursId);
+
+        while (sqlite3_step(stmt) == SQLITE_ROW) {
+            int id = sqlite3_column_int(stmt, 0);
+            std::string studentName = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1));
+            std::string filePath = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 2));
+            assignments.emplace_back(id, studentName, filePath);
+        }
+
+        sqlite3_finalize(stmt);
+    }
+
+    return assignments;
+}
+
+bool DatabaseManager::addGradeForAssignment(int assignmentId, int ocena) {
+    std::string sql = "UPDATE Zadania SET ocena = ? WHERE id = ?;";
+    sqlite3_stmt* stmt;
+
+    if (sqlite3_prepare_v2(db, sql.c_str(), -1, &stmt, nullptr) != SQLITE_OK) {
+        std::cerr << "Błąd SQL: " << sqlite3_errmsg(db) << std::endl;
+        return false;
+    }
+
+    sqlite3_bind_int(stmt, 1, ocena);
+    sqlite3_bind_int(stmt, 2, assignmentId);
+
+    bool success = sqlite3_step(stmt) == SQLITE_DONE;
+    sqlite3_finalize(stmt);
+
+    return success;
+}
+
+bool DatabaseManager::submitAssignment(int kursId, int studentId, const std::string& filePath) {
+    std::string sql = "INSERT INTO Zadania (kurs_id, student_id, file_path) VALUES (?, ?, ?);";
+    sqlite3_stmt* stmt;
+
+    if (sqlite3_prepare_v2(db, sql.c_str(), -1, &stmt, nullptr) != SQLITE_OK) {
+        std::cerr << "Błąd SQL: " << sqlite3_errmsg(db) << std::endl;
+        return false;
+    }
+
+    sqlite3_bind_int(stmt, 1, kursId);
+    sqlite3_bind_int(stmt, 2, studentId);
+    sqlite3_bind_text(stmt, 3, filePath.c_str(), -1, SQLITE_TRANSIENT);
+
+    bool success = sqlite3_step(stmt) == SQLITE_DONE;
+    sqlite3_finalize(stmt);
+
+    return success;
+}
+
+std::vector<std::pair<std::string, int>> DatabaseManager::getStudentGrades(int studentId) {
+    std::vector<std::pair<std::string, int>> grades;
+    std::string sql = R"(
+        SELECT K.tytul, Z.ocena 
+        FROM Zadania Z
+        JOIN Kurs K ON Z.kurs_id = K.id
+        WHERE Z.student_id = ? AND Z.ocena IS NOT NULL;
+    )";
+
+    sqlite3_stmt* stmt;
+    if (sqlite3_prepare_v2(db, sql.c_str(), -1, &stmt, nullptr) == SQLITE_OK) {
+        sqlite3_bind_int(stmt, 1, studentId);
+
+        while (sqlite3_step(stmt) == SQLITE_ROW) {
+            std::string kursTytul = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0));
+            int ocena = sqlite3_column_int(stmt, 1);
+            grades.emplace_back(kursTytul, ocena);
+        }
+
+        sqlite3_finalize(stmt);
+    }
+
+    return grades;
+}
+
+

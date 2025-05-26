@@ -30,8 +30,18 @@ public:
     std::unique_ptr<Uzytkownik> login(int nrAlbum, const std::string& haslo);
     bool addKurs(const std::string& tytul, int prowadzacyId, int wydzialId);
     std::vector<std::shared_ptr<Kurs>> getCoursesByLecturer(int lecturerId);
+    std::vector<std::pair<int, std::string>> getCoursesForStudent(int studentId);
     std::vector<std::shared_ptr<Kurs>> getAllCourses();
     bool addCourseContent(int kursId, const std::string& tytul, const std::string& zawartosc);
+    std::vector<std::tuple<int, std::string, std::string>> getCourseContents(int kursId);
+    std::vector<std::pair<int, std::string>> getStudentsInCourse(int kursId);
+    bool addGrade(int kursId, int studentId, int ocena);
+    std::vector<std::pair<int, std::string>> getAvailableCourses(int studentId);
+    bool joinCourse(int studentId, int kursId);
+    bool submitAssignment(int kursId, int studentId, const std::string& filePath);
+    std::vector<std::tuple<int, std::string, std::string>> getAssignments(int kursId);
+    bool addGradeForAssignment(int assignmentId, int ocena);
+    std::vector<std::pair<std::string, int>> getStudentGrades(int studentId);
 };
 
 #endif
