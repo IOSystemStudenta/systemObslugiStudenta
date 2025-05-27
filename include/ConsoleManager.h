@@ -35,6 +35,8 @@ public:
     void showInstructorManageKursPrompt(int kursId);
     void showCreateKursPrompt();
     void showLecturerCourses();
+    int selectCourseForGrading();
+    void showAssignmentsForGrading(int kursId);
     void showAssignmentsForCourse(int kursId);
     void showAssignmentDetails(int assignmentId, std::string studentName, std::string filePath, int kursId);
     void showGradePromptForAssignment(int assignmentId, int kursId);

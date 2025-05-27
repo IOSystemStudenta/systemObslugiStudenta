@@ -99,7 +99,7 @@ void DatabaseManager::createTables() {
     )";
 
     std::string zadaniaTable = R"(
-        CREATE TABLE Zadania (
+        CREATE TABLE IF NOT EXISTS Zadania (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             kurs_id INTEGER NOT NULL,
             student_id INTEGER NOT NULL,
@@ -397,13 +397,14 @@ bool DatabaseManager::submitAssignment(int kursId, int studentId, const std::str
 
     return success;
 }
+
 std::vector<std::tuple<int, std::string, std::string>> DatabaseManager::getAssignments(int kursId) {
     std::vector<std::tuple<int, std::string, std::string>> assignments;
     std::string sql = R"(
         SELECT Z.id, U.imie, Z.zawartosc 
         FROM Zadania Z
         JOIN Uzytkownik U ON Z.student_id = U.id
-        WHERE Z.kurs_id = ?;
+        WHERE Z.kurs_id = ? AND Z.ocena IS NULL; -- FILTR: TYLKO NIEOCENIONE PRACE
     )";
 
     sqlite3_stmt* stmt;
@@ -412,8 +413,12 @@ std::vector<std::tuple<int, std::string, std::string>> DatabaseManager::getAssig
 
         while (sqlite3_step(stmt) == SQLITE_ROW) {
             int id = sqlite3_column_int(stmt, 0);
-            std::string studentName = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1));
-            std::string zawartosc = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 2));
+            const char* studentNamePtr = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1));
+            const char* zawartoscPtr = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 2));
+
+            std::string studentName = studentNamePtr ? studentNamePtr : "Brak danych";
+            std::string zawartosc = zawartoscPtr ? zawartoscPtr : "Brak treści";
+
             assignments.emplace_back(id, studentName, zawartosc);
         }
 
@@ -422,7 +427,6 @@ std::vector<std::tuple<int, std::string, std::string>> DatabaseManager::getAssig
 
     return assignments;
 }
-
 
 bool DatabaseManager::addGradeForAssignment(int assignmentId, int ocena) {
     std::string sql = "UPDATE Zadania SET ocena = ? WHERE id = ?;";
@@ -441,7 +445,6 @@ bool DatabaseManager::addGradeForAssignment(int assignmentId, int ocena) {
 
     return success;
 }
-
 
 // Oceny
 std::vector<std::pair<std::string, int>> DatabaseManager::getStudentGrades(int studentId) {
